@@ -16,12 +16,16 @@ curl -O https://raw.githubusercontent.com/MarkTiedemann/run-in-tray/refs/heads/m
 
 To configure the script, you may set the following environment variables:
 
-- `tray_tooltip` _(Required)_ - The tooltip text shown when hovering over the tray icon
-- `tray_icon` _(Required)_ - The file path from which the icon will be extracted
+- `tray_tooltip`
+	- The tooltip text shown when hovering over the tray icon
+	- Default: `Close`
+- `tray_icon`
+	- The file path from which the icon will be extracted
+	- Default: `%SystemRoot%\System32\cmd.exe`
 
 **Example usage:**
 
-`serve.cmd`:
+`serve.cmd`: Run a PHP server in the background. Close it by clicking the PHP icon in the tray.
 
 ```bat
 @echo off

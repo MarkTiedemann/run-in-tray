@@ -5,52 +5,69 @@ if (argc === 0) {
 	WScript.Quit(1);
 }
 
-var exe = "";
-var args = "";
+var exe = WScript.Arguments.Item(0);
 
-for (var i = 0; i < argc; i++) {
-	if (i === 0) {
-		exe = WScript.Arguments.Item(i);
-	} else if (i === argc - 1) {
-		args += WScript.Arguments.Item(i);
-	} else {
-		args += WScript.Arguments.Item(i) + " ";
+var xmlArguments = "<arguments>";
+for (var i = 1; i < argc; i++) {
+	var escapedArgument = escapeArgument(WScript.Arguments.Item(i));
+	xmlArguments += "<argument>" + escapeXml(escapedArgument) + "</argument>";
+}
+xmlArguments += "</arguments>";
+
+function escapeArgument(s) {
+	for (var i = 0; i < s.length; i++) {
+		if (s.charAt(i) === " ") {
+			return '"' + s + '"';
+		}
 	}
+	return s;
+}
+
+function escapeXml(s) {
+	return s.replace(/[&<>"']/g, function(m) {
+		return "&#" + m.charCodeAt(0) + ";";
+	});
 }
 
 var shell = new ActiveXObject("WScript.Shell");
 
-var trayIcon = shell.expandEnvironmentStrings("%tray_icon%");
-var trayTooltip = shell.expandEnvironmentStrings("%tray_tooltip%");
-
-if (trayIcon === "") {
-	WScript.StdErr.WriteLine("Missing tray_icon");
-	WScript.Quit(1);
-}
-
-if (trayTooltip === "") {
-	WScript.StdErr.WriteLine("Missing tray_tooltip");
-	WScript.Quit(1);
-}
-
 var script = "";
+
+script += "$ErrorActionPreference = 'Stop';";
 
 script += "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null;";
 script += "[System.Reflection.Assembly]::LoadWithPartialName('System.Drawing') | Out-Null;";
 
+script += "$TrayTooltip = [System.Environment]::GetEnvironmentVariable('tray_tooltip');";
+script += "if ($TrayTooltip -eq $null) {";
+	script += "$TrayTooltip = 'Close';";
+script += "}";
+
+script += "$TrayIcon = [System.Environment]::GetEnvironmentVariable('tray_icon');";
+script += "if ($TrayIcon -eq $null) {";
+	script += "$TrayIcon = [System.Environment]::ExpandEnvironmentVariables('%SystemRoot%\\System32\\cmd.exe');";
+script += "}";
+
+script += "try {";
+	script += "$Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($TrayIcon);";
+script += "} catch {";
+	script += "$Icon = [System.Drawing.Icon]::ExtractAssociatedIcon([System.Environment]::ExpandEnvironmentVariables('%SystemRoot%\\System32\\cmd.exe'));";
+script += "}";
+
+script += "$XmlArguments = [xml]'" + xmlArguments + "';";
+script += "$Arguments = Select-Xml -Xml:$XmlArguments -XPath:'//argument//text()';";
+
 script += "$Process = [System.Diagnostics.Process]::New();";
 script += "$StartInfo = $Process.StartInfo;";
 script += "$StartInfo.FileName = '" + exe + "';";
-if (args !== "") {
-	script += "$StartInfo.Arguments = '" + args + "';";
-}
+script += "$StartInfo.Arguments = $Arguments -join ' ';";
 script += "$StartInfo.UseShellExecute = $false;";
 script += "$StartInfo.CreateNoWindow = $true;";
-script += "$Process.Start();";
+script += "$Process.Start() | Out-Null;";
 
 script += "$NotifyIcon = [System.Windows.Forms.NotifyIcon]::New();";
-script += "$NotifyIcon.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon('" + trayIcon + "');";
-script += "$NotifyIcon.Text = '" + trayTooltip + "';";
+script += "$NotifyIcon.Text = $TrayTooltip;";
+script += "$NotifyIcon.Icon = $Icon;";
 script += "$NotifyIcon.Visible = $true;";
 script += "$NotifyIcon.Add_Click({";
 	script += "if (!$Process.HasExited) {";
